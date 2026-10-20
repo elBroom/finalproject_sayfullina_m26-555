@@ -1,6 +1,7 @@
 import hashlib
 import json
 from datetime import datetime
+from typing import Dict, Optional
 
 
 class User:
@@ -196,3 +197,102 @@ class Wallet:
             currency_code=data["currency_code"],
             balance=data["balance"]
         )
+
+
+class Portfolio:
+    # Фиксированные курсы обмена (для примера)
+    # Базовая валюта: USD
+    EXCHANGE_RATES = {
+        "USD": 1.0,
+        "EUR": 0.85,  # 1 EUR = 0.85 USD
+        "BTC": 45000.0,  # 1 BTC = 45000 USD
+        "GBP": 0.75,
+        "JPY": 150.0
+    }
+
+    def __init__(self, user_id: int, wallets: Optional[Dict[str, Wallet]] = None):
+        """
+        Инициализация портфеля.
+        :param user_id: ID пользователя.
+        :param wallets: Словарь существующих кошельков.
+        """
+        self._user_id = user_id
+        self._wallets = wallets
+
+    @property
+    def user(self) -> int:
+        return self._user_id
+
+    @property
+    def wallets(self) -> Dict[str, Wallet]:
+        """
+        Возвращает копию словаря кошельков, чтобы нельзя было напрямую модифицировать
+        внутренний словарь извне.
+        """
+        return self._wallets.copy()
+
+    def add_currency(self, currency_code: str) -> Wallet:
+        """
+        Добавляет новый кошелёк в портфель.
+        Проверяет уникальность кода валюты.
+        """
+        if currency_code in self._wallets:
+            raise ValueError(f"Кошелёк с валютой {currency_code} уже существует.")
+
+        new_wallet = Wallet(currency_code=currency_code, balance=0.0)
+        self._wallets[currency_code] = new_wallet
+        return new_wallet
+
+    def get_wallet(self, currency_code: str) -> Optional[Wallet]:
+        """
+        Возвращает объект Wallet по коду валюты.
+        """
+        return self._wallets.get(currency_code)
+
+    def get_total_value(self, base_currency: str = 'USD') -> float:
+        """
+        Возвращает общую стоимость всех валют в указанной базовой валюте.
+        Использует фиксированные курсы из EXCHANGE_RATES.
+        """
+        if base_currency not in self.EXCHANGE_RATES:
+            raise ValueError(f"Курс для {base_currency} не найден.")
+
+        total_value = 0.0
+
+        for currency_code, wallet in self._wallets.items():
+            balance = wallet.balance
+            rate = self.EXCHANGE_RATES.get(currency_code, 1.0)
+
+            if currency_code != base_currency:
+                rate_base = self.EXCHANGE_RATES.get(base_currency, 1.0)
+                value_in_base = balance * (rate / rate_base)
+            else:
+                value_in_base = balance
+
+            total_value += value_in_base
+
+        return total_value
+
+    def to_json(self) -> str:
+        """
+        Конвертирует портфель в JSON-строку для сохранения.
+        """
+        return json.dumps({
+            "user_id": self._user_id,
+            "wallets": {
+                code: json.loads(wallet.to_json())
+                for code, wallet in self._wallets.items()
+            }
+        }, indent=2)
+
+    @classmethod
+    def from_json(cls, json_str: str) -> 'Portfolio':
+        """
+        Создает объект Portfolio из JSON-строки.
+        """
+        data = json.loads(json_str)
+
+        return cls(user_id=data["user_id"], wallets={
+            code: Wallet.from_json(json.dumps(wallet_data))
+            for code, wallet_data in data["wallets"].items()
+        })
