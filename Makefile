@@ -1,4 +1,5 @@
 build:
+	uv sync
 	uv build
 
 install:
