@@ -210,7 +210,7 @@ class Portfolio:
         "JPY": 150.0
     }
 
-    def __init__(self, user_id: int, wallets: Optional[Dict[str, Wallet]] = None):
+    def __init__(self, user_id: int, wallets: Optional[Dict[str, Wallet]]):
         """
         Инициализация портфеля.
         :param user_id: ID пользователя.

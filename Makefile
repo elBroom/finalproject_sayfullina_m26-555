@@ -6,7 +6,7 @@ install:
 	uv tool install dist/*.whl
 
 run: build install
-	database
+	valutatrade-hub
 
 check:
 	uvx twine check dist/*
