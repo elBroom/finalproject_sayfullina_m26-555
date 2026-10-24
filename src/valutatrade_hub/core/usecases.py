@@ -1,8 +1,8 @@
 import json
 import os
 import secrets
-from datetime import datetime, timedelta
-from typing import Optional
+from datetime import datetime
+from typing import Dict, Optional, Tuple
 
 from valutatrade_hub.core.models import Portfolio, User
 from valutatrade_hub.core.utils import load_json_file, save_json_file
@@ -51,6 +51,11 @@ def save_portfolio(portfolio: Portfolio):
     portfolios.append(json.loads(portfolio.to_json()))
     save_json_file(PORTFOLIOS_FILE, portfolios)
 
+def get_rates() -> Dict[str, float]:
+    rates = load_json_file(RATES_FILE, {})
+
+    return {key: val['rate'] for key, val in rates.items() if 'rate' in val}
+
 
 def get_rate(from_currency: str, to_currency: str) -> Optional[float]:
     rates = load_json_file(RATES_FILE, {})
@@ -59,7 +64,7 @@ def get_rate(from_currency: str, to_currency: str) -> Optional[float]:
     if key in rates:
         return rates[key]["rate"]
 
-    return None
+    raise ValueError('Конвертация не найдена')
 
 
 def save_rate(from_currency: str, to_currency: str, rate: float):
@@ -104,3 +109,44 @@ def login_user(username: str, password: str) -> User:
         raise ValueError("Неверный пароль")
 
     return user
+
+def get_user_portfolio(user: User) -> Portfolio:
+    """Получает портфель пользователя."""
+    portfolio = get_portfolio_by_user_id(user.user_id)
+    if not portfolio:
+        portfolio = Portfolio(user_id=user.user_id, wallets={})
+        save_portfolio(portfolio)
+    return portfolio
+
+
+def show_portfolio(user: User|None, base: str) -> Tuple[Portfolio, list]:
+    """Отображает портфель пользователя."""
+    if user is None:
+        raise ValueError("Сначала выполните login")
+
+    portfolio = get_user_portfolio(user)
+    if not len(portfolio.wallets):
+        raise ValueError(f"У пользователя {user.username} нет кошельков")
+
+    try:
+        total_value = 0.0
+        rows = []
+
+        for code, wallet in portfolio.wallets.items():
+            # Получаем курс конвертации
+            if code == base:
+                rate = 1
+            else:
+                rate = get_rate(code, base)
+
+            value_in_base = wallet.balance * rate
+            total_value += value_in_base
+
+            rows.append(
+                f"- {code}: {wallet.balance:.2f}  →  {value_in_base:.2f} {base}",
+            )
+    except KeyError:
+        raise ValueError(f"Неизвестная базовая валюта '{base}'")
+
+    return portfolio, rows
+

@@ -169,46 +169,9 @@ class Wallet:
         self._balance -= amount
         return amount
 
-    def get_balance_info(self) -> dict:
-        """
-        Возвращает информацию о балансе в виде словаря.
-        """
-        return {
-            "currency_code": self._currency_code,
-            "balance": self._balance
-        }
-
-    def to_json(self) -> str:
-        """
-        Конвертирует объект в JSON-строку для сохранения в портфеле.
-        """
-        return json.dumps({
-            "currency_code": self._currency_code,
-            "balance": self._balance
-        }, indent=2)
-
-    @classmethod
-    def from_json(cls, json_str: str) -> 'Wallet':
-        """
-        Создает объект Wallet из JSON-строки.
-        """
-        data = json.loads(json_str)
-        return cls(
-            currency_code=data["currency_code"],
-            balance=data["balance"]
-        )
-
 
 class Portfolio:
-    # Фиксированные курсы обмена (для примера)
-    # Базовая валюта: USD
-    EXCHANGE_RATES = {
-        "USD": 1.0,
-        "EUR": 0.85,  # 1 EUR = 0.85 USD
-        "BTC": 45000.0,  # 1 BTC = 45000 USD
-        "GBP": 0.75,
-        "JPY": 150.0
-    }
+    EXCHANGE_RATES = {}
 
     def __init__(self, user_id: int, wallets: Optional[Dict[str, Wallet]]):
         """
@@ -218,6 +181,10 @@ class Portfolio:
         """
         self._user_id = user_id
         self._wallets = wallets
+
+        from valutatrade_hub.core.usecases import get_rates
+        self.EXCHANGE_RATES = get_rates()
+
 
     @property
     def user(self) -> int:
@@ -252,22 +219,15 @@ class Portfolio:
     def get_total_value(self, base_currency: str = 'USD') -> float:
         """
         Возвращает общую стоимость всех валют в указанной базовой валюте.
-        Использует фиксированные курсы из EXCHANGE_RATES.
         """
-        if base_currency not in self.EXCHANGE_RATES:
-            raise ValueError(f"Курс для {base_currency} не найден.")
 
         total_value = 0.0
-
         for currency_code, wallet in self._wallets.items():
-            balance = wallet.balance
-            rate = self.EXCHANGE_RATES.get(currency_code, 1.0)
-
             if currency_code != base_currency:
-                rate_base = self.EXCHANGE_RATES.get(base_currency, 1.0)
-                value_in_base = balance * (rate / rate_base)
+                rate = self.EXCHANGE_RATES[f"{currency_code}_{base_currency}"]
+                value_in_base = wallet.balance * rate
             else:
-                value_in_base = balance
+                value_in_base = wallet.balance
 
             total_value += value_in_base
 
@@ -280,7 +240,7 @@ class Portfolio:
         return json.dumps({
             "user_id": self._user_id,
             "wallets": {
-                code: json.loads(wallet.to_json())
+                code: wallet.balance
                 for code, wallet in self._wallets.items()
             }
         }, indent=2)
@@ -293,6 +253,6 @@ class Portfolio:
         data = json.loads(json_str)
 
         return cls(user_id=data["user_id"], wallets={
-            code: Wallet.from_json(json.dumps(wallet_data))
-            for code, wallet_data in data["wallets"].items()
+            code: Wallet(code, balance)
+            for code, balance in data["wallets"].items()
         })
