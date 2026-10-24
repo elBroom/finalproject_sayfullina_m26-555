@@ -4,14 +4,18 @@ import shlex
 import prompt
 
 from valutatrade_hub.core.usecases import (
-    register_user, login_user, show_portfolio
+    CURRENCY_BASE,
+    buy_currency,
+    login_user,
+    register_user,
+    sell_currency,
+    show_portfolio,
 )
+
 
 def run_cli():
     parser = get_parser()
     current_user = None
-    # from valutatrade_hub.core.usecases import get_user_by_username
-    # current_user = get_user_by_username('test')
 
     while True:
         try:
@@ -24,8 +28,6 @@ def run_cli():
                     user = register_user(args.username, args.password)
 
                     print(
-                        f"Пользователь '{user.username}' "
-                        f"зарегистрирован (id={user.user_id}).\n",
                         f"Войдите: login --username {user.username} --password ****"
                     )
                 case "login":
@@ -35,24 +37,19 @@ def run_cli():
                     print(f"Вы вошли как '{current_user.username}'")
                 case "show-portfolio":
                     # show-portfolio
-                    protfolio, rows = show_portfolio(current_user, args.base)
-                    total = protfolio.get_total_value(args.base)
-                    print(
-                        f"Портфель пользователя '{current_user.username}'"
-                        f" (база: {args.base}):",
-                    )
-                    [print(r) for r in rows]
-                    print(
-                        "-" * 30,
-                        f"\nИТОГО: {total:,.2f} {args.base}",
-                    )
+                    show_portfolio(current_user, args.base)
+                case "buy":
+                    # buy --currency BTC --amount 0.05
+                    buy_currency(current_user, args.currency, args.amount)
+                case "sell":
+                    # sell --currency USD --amount 100
+                    sell_currency(current_user, args.currency, args.amount)
                 case 'exit':
                     break
                 case 'help':
                     parser.print_help()
         except (Exception, SystemExit) as e:
             print(f"Ошибка: {e}")
-            raise
 
 
 def get_parser():
@@ -83,20 +80,28 @@ def get_parser():
         "--username",
         required=True,
         help="Имя пользователя",
+        type=str,
     )
     p_register.add_argument(
         "--password",
         required=True,
         help="Пароль (мин. 4 символа)",
+        type=str,
     )
 
     # login
     p_login = subparsers.add_parser(
         "login", help="Войти в систему", exit_on_error=False)
     p_login.add_argument(
-        "--username", required=True, help="Имя пользователя")
+    "--username",
+        required=True,
+        help="Имя пользователя",
+        type=str,
+    )
     p_login.add_argument(
-        "--password", required=True, help="Пароль")
+        "--password", required=True, help="Пароль",
+        type=str,
+    )
 
     # show-portfolio
     p_portfolio = subparsers.add_parser(
@@ -106,8 +111,43 @@ def get_parser():
     )
     p_portfolio.add_argument(
         "--base",
-        default="USD",
-        help="Базовая валюта (по умолчанию USD)",
+        default=CURRENCY_BASE,
+        help=f"Базовая валюта (по умолчанию {CURRENCY_BASE})",
+        type=str,
+    )
+
+    # buy
+    p_buy = subparsers.add_parser(
+        "buy",
+        help="купить валюту",
+        exit_on_error=False,
+    )
+    p_buy.add_argument(
+        "--currency",
+        help="код валюты",
+        type=str,
+    )
+    p_buy.add_argument(
+        "--amount",
+        help="количество покупаемой валюты",
+        type=float,
+    )
+
+    # sell
+    p_sell = subparsers.add_parser(
+        "sell",
+        help="купить валюту",
+        exit_on_error=False,
+    )
+    p_sell.add_argument(
+        "--currency",
+        help="код валюты",
+        type=str,
+    )
+    p_sell.add_argument(
+        "--amount",
+        help="количество продаваемой валюты",
+        type=float,
     )
 
     return parser

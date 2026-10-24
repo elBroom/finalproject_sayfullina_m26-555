@@ -142,9 +142,6 @@ class Wallet:
         Пополнение баланса.
         Проверяет, что сумма положительная.
         """
-        if not isinstance(amount, (int, float)):
-            raise TypeError("Сумма пополнения должна быть числом.")
-
         if amount <= 0:
             raise ValueError("Сумма пополнения должна быть положительной.")
 
@@ -156,9 +153,6 @@ class Wallet:
         Проверяет, что сумма положительная и не превышает текущий баланс.
         Возвращает фактическую сумму снятия (или raises ошибку, если нельзя снять).
         """
-        if not isinstance(amount, (int, float)):
-            raise TypeError("Сумма снятия должна быть числом.")
-
         if amount <= 0:
             raise ValueError("Сумма снятия должна быть положительной.")
 
@@ -210,7 +204,7 @@ class Portfolio:
         self._wallets[currency_code] = new_wallet
         return new_wallet
 
-    def get_wallet(self, currency_code: str) -> Optional[Wallet]:
+    def get_wallet(self, currency_code: str) -> Optional[Wallet|None]:
         """
         Возвращает объект Wallet по коду валюты.
         """

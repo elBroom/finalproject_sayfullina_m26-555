@@ -2,7 +2,7 @@ import json
 import os
 import secrets
 from datetime import datetime
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional
 
 from valutatrade_hub.core.models import Portfolio, User
 from valutatrade_hub.core.utils import load_json_file, save_json_file
@@ -11,6 +11,8 @@ DATA_DIR = "data"
 USERS_FILE = os.path.join(DATA_DIR, "users.json")
 PORTFOLIOS_FILE = os.path.join(DATA_DIR, "portfolios.json")
 RATES_FILE = os.path.join(DATA_DIR, "rates.json")
+
+CURRENCY_BASE = "USD"
 
 
 
@@ -47,7 +49,7 @@ def get_portfolio_by_user_id(user_id: int) -> Optional[Portfolio]:
 def save_portfolio(portfolio: Portfolio):
     portfolios = load_json_file(PORTFOLIOS_FILE, [])
     # Обновляем или добавляем
-    portfolios = [p for p in portfolios if p["user_id"] != portfolio.user_id]
+    portfolios = [p for p in portfolios if p["user_id"] != portfolio.user]
     portfolios.append(json.loads(portfolio.to_json()))
     save_json_file(PORTFOLIOS_FILE, portfolios)
 
@@ -57,14 +59,17 @@ def get_rates() -> Dict[str, float]:
     return {key: val['rate'] for key, val in rates.items() if 'rate' in val}
 
 
-def get_rate(from_currency: str, to_currency: str) -> Optional[float]:
+def get_rate(from_currency: str, to_currency: str) -> Optional[float|None]:
+    if from_currency == to_currency:
+        return 1.0
+
     rates = load_json_file(RATES_FILE, {})
     key = f"{from_currency}_{to_currency}"
 
     if key in rates:
         return rates[key]["rate"]
 
-    raise ValueError('Конвертация не найдена')
+    return None
 
 
 def save_rate(from_currency: str, to_currency: str, rate: float):
@@ -79,7 +84,7 @@ def save_rate(from_currency: str, to_currency: str, rate: float):
     save_json_file(RATES_FILE, rates)
 
 
-def register_user(username: str, password: str) -> User:
+def register_user(username: str, password: str):
     if not username or not username.strip():
         raise ValueError("Имя пользователя не может быть пустым.")
 
@@ -97,7 +102,10 @@ def register_user(username: str, password: str) -> User:
     portfolio = Portfolio(user_id=user_id, wallets={})
     save_portfolio(portfolio)
 
-    return user
+    print(
+        f"Пользователь '{user.username}' "
+        f"зарегистрирован (id={user.user_id}).\n",
+    )
 
 
 def login_user(username: str, password: str) -> User:
@@ -119,7 +127,7 @@ def get_user_portfolio(user: User) -> Portfolio:
     return portfolio
 
 
-def show_portfolio(user: User|None, base: str) -> Tuple[Portfolio, list]:
+def show_portfolio(user: User|None, base: str):
     """Отображает портфель пользователя."""
     if user is None:
         raise ValueError("Сначала выполните login")
@@ -130,8 +138,9 @@ def show_portfolio(user: User|None, base: str) -> Tuple[Portfolio, list]:
 
     try:
         total_value = 0.0
-        rows = []
-
+        print(
+            f"Портфель пользователя '{user.username}' (база: {base}):",
+        )
         for code, wallet in portfolio.wallets.items():
             # Получаем курс конвертации
             if code == base:
@@ -142,11 +151,89 @@ def show_portfolio(user: User|None, base: str) -> Tuple[Portfolio, list]:
             value_in_base = wallet.balance * rate
             total_value += value_in_base
 
-            rows.append(
+            print(
                 f"- {code}: {wallet.balance:.2f}  →  {value_in_base:.2f} {base}",
             )
+        print(
+            "-" * 30,
+            f"\nИТОГО: {total_value:,.2f} {base}",
+        )
     except KeyError:
         raise ValueError(f"Неизвестная базовая валюта '{base}'")
 
-    return portfolio, rows
+
+def buy_currency(user: User|None, currency: str, amount: float):
+    if user is None:
+        raise ValueError("Сначала выполните login")
+
+    if amount <= 0:
+        raise ValueError("'amount' должен быть положительным числом")
+
+    rate = get_rate(currency, CURRENCY_BASE)
+    if rate is None:
+        raise ValueError(
+            f'Не удалось получить курс для {currency}->{CURRENCY_BASE}',
+        )
+
+    portfolio = get_user_portfolio(user)
+    wallet = portfolio.get_wallet(currency)
+    if wallet is None:
+        wallet = portfolio.add_currency(currency)
+
+    prev_amount = wallet.balance
+    cost_usd = amount * rate
+    wallet.deposit(amount)
+    curr_amount = wallet.balance
+
+    save_portfolio(portfolio)
+
+    print(
+        f"Покупка выполнена: {amount:.4f} {currency} "
+        f"по курсу {rate:.2f} {CURRENCY_BASE}/{currency}",
+        "\nИзменения в портфеле:",
+        f"\n- {currency}: было {prev_amount:.4f} → стало {curr_amount:.4f}"
+        f"\nОценочная стоимость покупки: {cost_usd:.2f} {CURRENCY_BASE}"
+    )
+
+def sell_currency(user: User|None, currency: str, amount: float):
+    if user is None:
+        raise ValueError("Сначала выполните login")
+
+    if amount <= 0:
+        raise ValueError("'amount' должен быть положительным числом")
+
+    rate = get_rate(currency, CURRENCY_BASE)
+    if rate is None:
+        raise ValueError(
+            f'Не удалось получить курс для {currency}->{CURRENCY_BASE}',
+        )
+
+    portfolio = get_user_portfolio(user)
+    wallet = portfolio.get_wallet(currency)
+    if wallet is None:
+        raise ValueError(
+            f"У вас нет кошелька '{currency}'. "
+            f"Добавьте валюту: она создаётся автоматически при первой покупке.",
+        )
+
+    if wallet.balance < amount:
+        raise ValueError(
+            f"Недостаточно средств: доступно {wallet.balance} {currency},"
+            f" требуется {amount} {currency}",
+        )
+
+    prev_amount = wallet.balance
+    cost_usd = amount * rate
+    wallet.withdraw(amount)
+    curr_amount = wallet.balance
+
+    save_portfolio(portfolio)
+
+    print(
+        f"Продажа выполнена: {amount:.4f} {currency} "
+        f"по курсу {rate:.2f} {CURRENCY_BASE}/{currency}",
+        "\nИзменения в портфеле:",
+        f"\n- {currency}: было {prev_amount:.4f} → стало {curr_amount:.4f}"
+        f"\nОценочная выручка: {cost_usd:.2f} {CURRENCY_BASE}"
+    )
 
