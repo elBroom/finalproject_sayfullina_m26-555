@@ -3,6 +3,8 @@ import json
 from datetime import datetime
 from typing import Dict, Optional
 
+from valutatrade_hub.core.utils import get_rate_dummy
+
 
 class User:
     def __init__(self, user_id: int, username: str, password: str, salt: str):
@@ -165,8 +167,6 @@ class Wallet:
 
 
 class Portfolio:
-    EXCHANGE_RATES = {}
-
     def __init__(self, user_id: int, wallets: Optional[Dict[str, Wallet]]):
         """
         Инициализация портфеля.
@@ -175,9 +175,6 @@ class Portfolio:
         """
         self._user_id = user_id
         self._wallets = wallets
-
-        from valutatrade_hub.core.usecases import get_rates
-        self.EXCHANGE_RATES = get_rates()
 
 
     @property
@@ -218,7 +215,7 @@ class Portfolio:
         total_value = 0.0
         for currency_code, wallet in self._wallets.items():
             if currency_code != base_currency:
-                rate = self.EXCHANGE_RATES[f"{currency_code}_{base_currency}"]
+                rate = get_rate_dummy(currency_code, base_currency)
                 value_in_base = wallet.balance * rate
             else:
                 value_in_base = wallet.balance

@@ -6,6 +6,7 @@ import prompt
 from valutatrade_hub.core.usecases import (
     CURRENCY_BASE,
     buy_currency,
+    get_rate_currency,
     login_user,
     register_user,
     sell_currency,
@@ -44,6 +45,9 @@ def run_cli():
                 case "sell":
                     # sell --currency USD --amount 100
                     sell_currency(current_user, args.currency, args.amount)
+                case "get-rate":
+                    # get-rate --from USD --to BTC
+                    get_rate_currency(args.from_currency, args.to_currency)
                 case 'exit':
                     break
                 case 'help':
@@ -65,15 +69,15 @@ def get_parser():
     subparsers = parser.add_subparsers(dest="command", help="Доступные команды")
 
     # help
-    subparsers.add_parser("help", help="справочная информация")
+    subparsers.add_parser("help", help="Справочная информация")
 
     # exit
-    subparsers.add_parser("exit", help="выход из программы")
+    subparsers.add_parser("exit", help="Выход из программы")
 
     # register
     p_register = subparsers.add_parser(
     "register",
-        help="создать нового пользователя",
+        help="Создать нового пользователя",
         exit_on_error=False,
     )
     p_register.add_argument(
@@ -119,35 +123,50 @@ def get_parser():
     # buy
     p_buy = subparsers.add_parser(
         "buy",
-        help="купить валюту",
+        help="Купить валюту",
         exit_on_error=False,
     )
     p_buy.add_argument(
         "--currency",
-        help="код валюты",
+        help="Код валюты",
         type=str,
     )
     p_buy.add_argument(
         "--amount",
-        help="количество покупаемой валюты",
+        help="Количество покупаемой валюты",
         type=float,
     )
 
     # sell
     p_sell = subparsers.add_parser(
         "sell",
-        help="купить валюту",
+        help="Купить валюту",
         exit_on_error=False,
     )
     p_sell.add_argument(
         "--currency",
-        help="код валюты",
+        help="Код валюты",
         type=str,
     )
     p_sell.add_argument(
         "--amount",
-        help="количество продаваемой валюты",
+        help="Количество продаваемой валюты",
         type=float,
+    )
+
+    # get-rate
+    p_get_rate = subparsers.add_parser(
+        "get-rate",
+        help="Получить текущий курс одной валюты к другой",
+        exit_on_error=False,
+    )
+    p_get_rate.add_argument(
+        "--from", dest="from_currency",
+        required=True, help="Исходная валюта",
+    )
+    p_get_rate.add_argument(
+        "--to", dest="to_currency",
+        required=True, help="Целевая валюта",
     )
 
     return parser
