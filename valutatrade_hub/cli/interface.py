@@ -3,15 +3,20 @@ import shlex
 
 import prompt
 
+from valutatrade_hub.core.exceptions import (
+    ApiRequestError,
+    CurrencyNotFoundError,
+    InsufficientFundsError,
+)
 from valutatrade_hub.core.usecases import (
-    CURRENCY_BASE,
     buy_currency,
-    get_rate_currency,
+    get_rate,
     login_user,
     register_user,
     sell_currency,
     show_portfolio,
 )
+from valutatrade_hub.infra.settings import settings
 
 
 def run_cli():
@@ -26,34 +31,61 @@ def run_cli():
             match args.command:
                 case "register":
                     # register --username test --password 1234
-                    user = register_user(args.username, args.password)
+                    user = register_user(
+                        username=args.username,
+                        password=args.password,
+                    )
 
                     print(
                         f"Войдите: login --username {user.username} --password ****"
                     )
                 case "login":
                     # login --username test --password 1234
-                    current_user = login_user(args.username, args.password)
+                    current_user = login_user(
+                        username=args.username,
+                        password=args.password,
+                    )
 
                     print(f"Вы вошли как '{current_user.username}'")
                 case "show-portfolio":
                     # show-portfolio
-                    show_portfolio(current_user, args.base)
+                    show_portfolio(
+                        user=current_user, base=args.base,
+                    )
                 case "buy":
                     # buy --currency BTC --amount 0.05
-                    buy_currency(current_user, args.currency, args.amount)
+                    buy_currency(
+                        user=current_user,
+                        currency=args.currency,
+                        amount=args.amount,
+                    )
                 case "sell":
                     # sell --currency USD --amount 100
-                    sell_currency(current_user, args.currency, args.amount)
+                    sell_currency(
+                        user=current_user,
+                        currency=args.currency,
+                        amount=args.amount,
+                    )
                 case "get-rate":
                     # get-rate --from USD --to BTC
-                    get_rate_currency(args.from_currency, args.to_currency)
+                    get_rate(
+                        from_code=args.from_currency,
+                        to_code=args.to_currency,
+                    )
                 case 'exit':
                     break
                 case 'help':
                     parser.print_help()
-        except (Exception, SystemExit) as e:
+        except (
+                InsufficientFundsError,
+                CurrencyNotFoundError,
+                ApiRequestError
+        ) as e:
+            print(e)
+        except (ValueError, TypeError) as e:
             print(f"Ошибка: {e}")
+        except (Exception, SystemExit) as e:
+            print(f"Системная ошибка: {e}")
 
 
 def get_parser():
@@ -115,8 +147,9 @@ def get_parser():
     )
     p_portfolio.add_argument(
         "--base",
-        default=CURRENCY_BASE,
-        help=f"Базовая валюта (по умолчанию {CURRENCY_BASE})",
+        default=settings.get('default_base_currency'),
+        help=f"Базовая валюта "
+             f"(по умолчанию {settings.get('default_base_currency')})",
         type=str,
     )
 

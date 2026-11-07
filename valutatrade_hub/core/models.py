@@ -3,6 +3,7 @@ import json
 from datetime import datetime
 from typing import Dict, Optional
 
+from valutatrade_hub.core.exceptions import InsufficientFundsError
 from valutatrade_hub.core.utils import get_rate_dummy
 
 
@@ -159,8 +160,11 @@ class Wallet:
             raise ValueError("Сумма снятия должна быть положительной.")
 
         if amount > self._balance:
-            raise ValueError(f"Недостаточно средств. "
-                             f"Текущий баланс: {self._balance}, запрошено: {amount}")
+            raise InsufficientFundsError(
+                code=self._currency_code,
+                required=amount,
+                available=self._balance,
+            )
 
         self._balance -= amount
         return amount

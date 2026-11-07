@@ -2,6 +2,8 @@ import json
 import os
 from typing import Any
 
+ALLOW_CURRENCY = ["USD", "EUR", "BTC", "ETH"]
+
 
 def load_json_file(filepath: str, default=None):
     if not os.path.exists(filepath):

@@ -4,20 +4,22 @@ import secrets
 from datetime import datetime, timedelta
 from typing import Dict, Optional
 
+from valutatrade_hub.core.currencies import get_currency
+from valutatrade_hub.core.exceptions import InsufficientFundsError
 from valutatrade_hub.core.models import Portfolio, User
 from valutatrade_hub.core.utils import (
     get_rate_dummy,
     load_json_file,
     save_json_file,
 )
+from valutatrade_hub.decorators import log_action
+from valutatrade_hub.infra.settings import settings
 
-DATA_DIR = "data"
-USERS_FILE = os.path.join(DATA_DIR, "users.json")
-PORTFOLIOS_FILE = os.path.join(DATA_DIR, "portfolios.json")
-RATES_FILE = os.path.join(DATA_DIR, "rates.json")
+USERS_FILE = os.path.join(settings.get("data_dir"), "users.json")
+PORTFOLIOS_FILE = os.path.join(settings.get("data_dir"), "portfolios.json")
+RATES_FILE = os.path.join(settings.get("data_dir"), "rates.json")
 
-CURRENCY_BASE = "USD"
-ALLOW_CURRENCY = ["USD", "EUR", "BTC", "ETH"]
+CURRENCY_BASE = settings.get("default_base_currency")
 
 
 def get_next_user_id() -> int:
@@ -63,7 +65,7 @@ def get_rates() -> Dict[str, float]:
     return {key: val['rate'] for key, val in rates.items() if 'rate' in val}
 
 
-def get_rate(from_currency: str, to_currency: str) -> Optional[float|None]:
+def get_rate_val(from_currency: str, to_currency: str) -> Optional[float|None]:
     if from_currency == to_currency:
         return 1.0
 
@@ -91,7 +93,8 @@ def get_rate_fresh(from_currency: str, to_currency: str) -> dict:
         rate_data = rates[key]
 
         updated_at = datetime.fromisoformat(rate_data["updated_at"])
-        if datetime.now() - updated_at < timedelta(minutes=5):
+        delta = timedelta(seconds=settings.get('rates_ttl_seconds'))
+        if datetime.now() - updated_at < delta:
             return rate_data
     except KeyError:
         pass
@@ -117,6 +120,7 @@ def save_rate(from_currency: str, to_currency: str, rate: float):
     save_json_file(RATES_FILE, rates)
 
 
+@log_action(action_name='REGISTER')
 def register_user(username: str, password: str):
     if not username or not username.strip():
         raise ValueError("Имя пользователя не может быть пустым.")
@@ -140,7 +144,7 @@ def register_user(username: str, password: str):
         f"зарегистрирован (id={user.user_id}).\n",
     )
 
-
+@log_action(action_name='LOGIN')
 def login_user(username: str, password: str) -> User:
     user = get_user_by_username(username)
     if not user:
@@ -180,7 +184,7 @@ def show_portfolio(user: User|None, base: str):
             if code == base:
                 rate = 1
             else:
-                rate = get_rate(code, base)
+                rate = get_rate_val(code, base)
 
             value_in_base = wallet.balance * rate
             total_value += value_in_base
@@ -196,6 +200,7 @@ def show_portfolio(user: User|None, base: str):
         raise ValueError(f"Неизвестная базовая валюта '{base}'")
 
 
+@log_action(action_name='BUY')
 def buy_currency(user: User|None, currency: str, amount: float):
     if user is None:
         raise ValueError("Сначала выполните login")
@@ -203,12 +208,9 @@ def buy_currency(user: User|None, currency: str, amount: float):
     if amount <= 0:
         raise ValueError("'amount' должен быть положительным числом")
 
-    if currency not in ALLOW_CURRENCY:
-        raise ValueError(
-            f"Валюта не поддерживается, доступно {','.join(ALLOW_CURRENCY)}",
-        )
+    get_currency(currency)
 
-    rate = get_rate(currency, CURRENCY_BASE)
+    rate = get_rate_val(currency, CURRENCY_BASE)
     if rate is None:
         raise ValueError(
             f'Не удалось получить курс для {currency}->{CURRENCY_BASE}',
@@ -234,6 +236,7 @@ def buy_currency(user: User|None, currency: str, amount: float):
         f"\nОценочная стоимость покупки: {cost_usd:.2f} {CURRENCY_BASE}"
     )
 
+@log_action(action_name='SELL')
 def sell_currency(user: User|None, currency: str, amount: float):
     if user is None:
         raise ValueError("Сначала выполните login")
@@ -241,12 +244,9 @@ def sell_currency(user: User|None, currency: str, amount: float):
     if amount <= 0:
         raise ValueError("'amount' должен быть положительным числом")
 
-    if currency not in ALLOW_CURRENCY:
-        raise ValueError(
-            f"Валюта не поддерживается, доступно {','.join(ALLOW_CURRENCY)}",
-        )
+    get_currency(currency)
 
-    rate = get_rate(currency, CURRENCY_BASE)
+    rate = get_rate_val(currency, CURRENCY_BASE)
     if rate is None:
         raise ValueError(
             f'Не удалось получить курс для {currency}->{CURRENCY_BASE}',
@@ -261,9 +261,10 @@ def sell_currency(user: User|None, currency: str, amount: float):
         )
 
     if wallet.balance < amount:
-        raise ValueError(
-            f"Недостаточно средств: доступно {wallet.balance} {currency},"
-            f" требуется {amount} {currency}",
+        raise InsufficientFundsError(
+            code=currency,
+            required=amount,
+            available=wallet.balance,
         )
 
     prev_amount = wallet.balance
@@ -281,33 +282,17 @@ def sell_currency(user: User|None, currency: str, amount: float):
         f"\nОценочная выручка: {cost_usd:.2f} {CURRENCY_BASE}"
     )
 
-def get_rate_currency(from_currency: str, to_currency: str):
-    if not from_currency.isupper():
-        raise ValueError(
-            f'Валюта "{from_currency}" ожидается в верхнем регистре',
-        )
+@log_action(action_name='GET-RATE')
+def get_rate(from_code: str, to_code: str):
+    get_currency(from_code)
+    get_currency(to_code)
 
-    if not to_currency.isupper():
-        raise ValueError(
-            f'Валюта "{to_currency}" ожидается в верхнем регистре',
-        )
-
-    if from_currency not in ALLOW_CURRENCY:
-        raise ValueError(
-            f"Валюта не поддерживается, доступно {','.join(ALLOW_CURRENCY)}",
-        )
-
-    if to_currency not in ALLOW_CURRENCY:
-        raise ValueError(
-            f"Валюта не поддерживается, доступно {','.join(ALLOW_CURRENCY)}",
-        )
-
-    rate_data = get_rate_fresh(from_currency, to_currency)
+    rate_data = get_rate_fresh(from_code, to_code)
 
     rate = f'{rate_data["rate"]:.8f}'.rstrip('0')
     revert_rate = f'{1.0/rate_data["rate"]:.8f}'.rstrip('0')
     updated_at = rate_data["updated_at"]
     print(
-        f"Курс {from_currency}→{to_currency}: {rate} (обновлено: {updated_at})"
-        f"\nОбратный курс {to_currency}→{from_currency}: {revert_rate}",
+        f"Курс {from_code}→{to_code}: {rate} (обновлено: {updated_at})"
+        f"\nОбратный курс {to_code}→{from_code}: {revert_rate}",
     )
