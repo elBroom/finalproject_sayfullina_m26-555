@@ -2,18 +2,20 @@ import json
 import os
 import secrets
 from datetime import datetime, timedelta
-from typing import Dict, Optional
+from typing import Optional
 
+from core.exceptions import ApiRequestError
 from valutatrade_hub.core.currencies import get_currency
 from valutatrade_hub.core.exceptions import InsufficientFundsError
 from valutatrade_hub.core.models import Portfolio, User
 from valutatrade_hub.core.utils import (
-    get_rate_dummy,
     load_json_file,
     save_json_file,
 )
 from valutatrade_hub.decorators import log_action
 from valutatrade_hub.infra.settings import settings
+from valutatrade_hub.parser_service.config import ParserConfig
+from valutatrade_hub.parser_service.updater import RatesUpdater
 
 USERS_FILE = os.path.join(settings.get("data_dir"), "users.json")
 PORTFOLIOS_FILE = os.path.join(settings.get("data_dir"), "portfolios.json")
@@ -59,12 +61,6 @@ def save_portfolio(portfolio: Portfolio):
     portfolios.append(json.loads(portfolio.to_json()))
     save_json_file(PORTFOLIOS_FILE, portfolios)
 
-def get_rates() -> Dict[str, float]:
-    rates = load_json_file(RATES_FILE, {})
-
-    return {key: val['rate'] for key, val in rates.items() if 'rate' in val}
-
-
 def get_rate_val(from_currency: str, to_currency: str) -> Optional[float|None]:
     if from_currency == to_currency:
         return 1.0
@@ -83,42 +79,31 @@ def get_rate_val(from_currency: str, to_currency: str) -> Optional[float|None]:
     return None
 
 def get_rate_fresh(from_currency: str, to_currency: str) -> dict:
-    rates = load_json_file(RATES_FILE, {})
-    if f"{from_currency}_{to_currency}" in rates:
-        key = f"{from_currency}_{to_currency}"
-    else:
-        key = f"{to_currency}_{from_currency}"
+    update_rate_iscall = False
+    while True:
+        rates = load_json_file(RATES_FILE, {})
+        if f"{from_currency}_{to_currency}" in rates:
+            key = f"{from_currency}_{to_currency}"
+        else:
+            key = f"{to_currency}_{from_currency}"
 
-    try:
-        rate_data = rates[key]
+        try:
+            rate_data = rates[key]
 
-        updated_at = datetime.fromisoformat(rate_data["updated_at"])
-        delta = timedelta(seconds=settings.get('rates_ttl_seconds'))
-        if datetime.now() - updated_at < delta:
-            return rate_data
-    except KeyError:
-        pass
-
-    rates[key] = {
-        'rate': get_rate_dummy(from_currency, to_currency),
-        'updated_at': datetime.now().strftime('%Y-%m-%dT%H:%M:%S'),
-    }
-    save_json_file(RATES_FILE, rates)
-
-    return rates[key]
-
-
-def save_rate(from_currency: str, to_currency: str, rate: float):
-    rates = load_json_file(RATES_FILE, {})
-    key = f"{from_currency}_{to_currency}"
-    rates[key] = {
-        "rate": rate,
-        "updated_at": datetime.now().isoformat(),
-        "source": "CLI_Cache"
-    }
-    rates["last_refresh"] = datetime.now().isoformat()
-    save_json_file(RATES_FILE, rates)
-
+            updated_at = datetime.fromisoformat(rate_data["updated_at"])
+            delta = timedelta(seconds=settings.get('rates_ttl_seconds'))
+            if datetime.now() - updated_at < delta:
+                return rate_data
+        except KeyError:
+            pass
+        if not update_rate_iscall:
+            update_rate_iscall = True
+            update_rate()
+        else:
+            raise ApiRequestError(
+                f'Курс {to_currency}→{from_currency} недоступен. '
+                f'Повторите попытку позже.'
+            )
 
 @log_action(action_name='REGISTER')
 def register_user(username: str, password: str):
@@ -296,3 +281,11 @@ def get_rate(from_code: str, to_code: str):
         f"Курс {from_code}→{to_code}: {rate} (обновлено: {updated_at})"
         f"\nОбратный курс {to_code}→{from_code}: {revert_rate}",
     )
+
+def update_rate(source: str = None):
+    parser_srv = RatesUpdater(ParserConfig())
+    cnt = parser_srv.run_update(source)
+    print(f'Обновлено: {cnt} валют')
+
+def show_rate(currency: str, top: int, base: str):
+    print('Команда не реализована')

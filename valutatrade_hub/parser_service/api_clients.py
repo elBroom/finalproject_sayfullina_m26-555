@@ -31,11 +31,16 @@ class CoinGeckoClient(BaseApiClient):
 
             rates = {}
             for crypto_code, crypto_data in data.items():
-                if vs_currencies in crypto_data:
+                if vs_currencies.lower() in crypto_data:
                     # Преобразуем ID обратно в тикер для ключа
                     ticker = next((k for k, v in config.CRYPTO_ID_MAP.items()
                                    if v == crypto_code), crypto_code)
-                    rates[f"{ticker}_{vs_currencies}"] = crypto_data[vs_currencies]
+                    rates[f"{ticker}_{vs_currencies}"] = {
+                        'raw_id': crypto_code,
+                        'from_currency': ticker,
+                        'to_currency': vs_currencies.upper(),
+                        'rate': crypto_data[vs_currencies.lower()],
+                    }
 
             return rates
         except requests.exceptions.RequestException as e:
@@ -62,38 +67,14 @@ class ExchangeRateApiClient(BaseApiClient):
             base = config.BASE_CURRENCY
 
             for fiat_code in config.FIAT_CURRENCIES:
-                if fiat_code in data.get("rates", {}):
-                    rate = data["rates"][fiat_code]
-                    # Формат: FIAT_USD (например, EUR_USD)
-                    # Если базовая валюта USD, то EUR_USD = 0.927 (1 USD = 0.927 EUR)
-                    # Но обычно нам нужен курс конвертации FROM -> TO.
-                    # В данном примере мы сохраняем курс относительно BASE_CURRENCY.
-                    # Если BASE_CURRENCY = USD, то EUR_USD означает "сколько USD за 1 EUR"?
-                    # Нет, API возвращает: 1 USD = X EUR.
-                    # Чтобы получить курс EUR -> USD, нужно 1 / X.
-                    # Однако, для простоты кэширования в Core Service, часто хранят именно то, что вернул API.
-                    # Давайте будем хранить как "BASE_CURRENCY_TO_FIAT" или "FIAT_TO_BASE_CURRENCY"?
-                    # В задании сказано: "from_currency: EUR, to_currency: USD, rate: 0.927".
-                    # Это значит 1 USD = 0.927 EUR.
-                    # Но в rates.json мы хотим хранить пары.
-                    # Давайте стандартизируем: "BASE_TO_FIAT" или "FIAT_TO_BASE".
-                    # Для удобства Core Service, пусть ключ будет "FIAT_BASE" (например, EUR_USD),
-                    # а значение — курс 1 USD = X EUR.
-                    # Если Core Service хочет курс EUR -> USD, он сделает 1/rate.
-                    # Или, чтобы было понятнее, сохраним как "USD_EUR" (1 USD = 0.927 EUR).
-                    # Но в задании пример: "EUR_USD": 1.0786 (это 1 EUR = 1.0786 USD).
-                    # Значит, нам нужно инвертировать ответ API, если мы хотим хранить "FROM_TO".
-
-                    # Интерпретация задания: "from_currency: EUR, to_currency: USD, rate: 0.927"
-                    # Это 1 USD = 0.927 EUR.
-                    # Если мы хотим хранить "EUR_USD" как курс конвертации EUR -> USD, то это 1/0.927 = 1.0786.
-
-                    # Реализуем сохранение в формате "BASE_TO_FIAT" (1 USD = X EUR) для простоты,
-                    # но в задании пример rates.json показывает "EUR_USD": 1.0786.
-                    # Значит, нам нужно инвертировать.
-
-                    inverted_rate = 1.0 / rate
-                    rates[f"{fiat_code}_{base}"] = inverted_rate
+                if fiat_code in data.get("conversion_rates", {}):
+                    rate = data["conversion_rates"][fiat_code]
+                    rates[f"{fiat_code}_{base}"] = {
+                        'raw_id': fiat_code,
+                        'from_currency': fiat_code,
+                        'to_currency': base.upper(),
+                        'rate': 1.0 / rate,
+                    }
 
             return rates
         except requests.exceptions.RequestException as e:

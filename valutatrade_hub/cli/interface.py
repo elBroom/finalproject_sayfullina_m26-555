@@ -15,13 +15,15 @@ from valutatrade_hub.core.usecases import (
     register_user,
     sell_currency,
     show_portfolio,
+    update_rate,
+    show_rate,
 )
 from valutatrade_hub.infra.settings import settings
 
 
 def run_cli():
-    parser = get_parser()
     current_user = None
+    parser = get_parser()
 
     while True:
         try:
@@ -72,6 +74,16 @@ def run_cli():
                         from_code=args.from_currency,
                         to_code=args.to_currency,
                     )
+                case "update-rates":
+                    # update-rates
+                    update_rate(source=args.source)
+                case "show-rates":
+                    # show-rates
+                    show_rate(
+                        currency=args.currency,
+                        top=args.top,
+                        base=args.base,
+                    )
                 case 'exit':
                     break
                 case 'help':
@@ -82,9 +94,9 @@ def run_cli():
                 ApiRequestError
         ) as e:
             print(e)
-        except (ValueError, TypeError) as e:
+        except (ValueError, TypeError, Exception) as e:
             print(f"Ошибка: {e}")
-        except (Exception, SystemExit) as e:
+        except SystemExit as e:
             print(f"Системная ошибка: {e}")
 
 
@@ -202,6 +214,41 @@ def get_parser():
         required=True, help="Целевая валюта",
     )
 
+    # update-rates
+    p_update_rates = subparsers.add_parser(
+        "update-rates",
+        help="Обновление курсов валют",
+        exit_on_error=False,
+    )
+    p_update_rates.add_argument(
+        "--source",
+         help="Обновить данные только из указанного источника",
+         type=str,
+    )
+
+    # show-rates
+    p_show_rates = subparsers.add_parser(
+        "show-rates",
+        help="Обновление курсов валют",
+        exit_on_error=False,
+    )
+    p_show_rates.add_argument(
+        "--currency",
+        required=True,
+        help="Показать курс только для указанной валюты",
+        type=str,
+    )
+    p_show_rates.add_argument(
+        "--top",
+        required=True,
+        help="Показать N самых дорогих криптовалют",
+        type=int,
+    )
+    p_show_rates.add_argument(
+        "--base",
+        help="Показать все курсы относительно указанной базы ",
+        type=int,
+    )
     return parser
 
 

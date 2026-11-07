@@ -1,11 +1,11 @@
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass
 class ParserConfig:
     # API Ключи (загружаются из переменных окружения)
-    EXCHANGERATE_API_KEY: str = os.getenv("EXCHANGERATE_API_KEY", "TEST")
+    EXCHANGERATE_API_KEY: str = os.getenv("EXCHANGERATE_API_KEY", "")
 
     # Эндпоинты
     COINGECKO_URL: str = "https://api.coingecko.com/api/v3/simple/price"
@@ -17,11 +17,11 @@ class ParserConfig:
     CRYPTO_CURRENCIES: tuple = ("BTC", "ETH", "SOL")
 
     # Карта соответствия ID CoinGecko и тикеров
-    CRYPTO_ID_MAP: dict = {
+    CRYPTO_ID_MAP: dict = field(default_factory=lambda: {
         "BTC": "bitcoin",
         "ETH": "ethereum",
         "SOL": "solana",
-    }
+    })
 
     # Пути к файлам
     RATES_FILE_PATH: str = "data/rates.json"
