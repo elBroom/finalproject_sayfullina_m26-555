@@ -15,9 +15,16 @@
   },
   {
     "user_id": 3,
-    "username": "test3",
-    "hashed_password": "0757aa74b06279d4554574a88dca8d1203b0959f455548ac225d5e7d1046450e",
-    "salt": "y_zmR0_6pr-iNbGJOBVF7A",
-    "registration_date": "2026-10-24T22:00:55.961508"
+    "username": "trader1",
+    "hashed_password": "91ad18e168d60ae809419b7797df9359f51c6f000603a984c5e51063922644c5",
+    "salt": "M286T6d_JxTdRDV8EPggxw",
+    "registration_date": "2026-11-08T18:52:55.891515"
+  },
+  {
+    "user_id": 4,
+    "username": "trader2",
+    "hashed_password": "4e6c34f6cca35cb2d9fbd852bad17dd7de0b8e8519a7786c54e39f4298966ecd",
+    "salt": "uClC_HpPQiEg7lAgYPh7KA",
+    "registration_date": "2026-11-08T18:59:11.041636"
   }
 ]

@@ -8,13 +8,41 @@ from valutatrade_hub.parser_service.config import ParserConfig
 
 
 class BaseApiClient(ABC):
+    """
+    Абстрактный базовый класс для клиентов внешних API.
+
+    Определяет интерфейс для получения курсов валют и обработки ошибок.
+    Все конкретные клиентские классы должны наследоваться от этого класса
+    и реализовывать метод `fetch_rates`.
+    """
     @abstractmethod
     def fetch_rates(self, config: ParserConfig) -> Dict[str, float]:
+        """
+        Получает курсы валют с внешнего API.
+
+        Args:
+            config: Объект конфигурации ParserConfig.
+
+        Returns:
+            Dict[str, float]: Словарь пар валют и их курсов
+                (ключ: "FROM_TO", значение: rate).
+
+        Raises:
+            ApiRequestError: Если запрос не выполнен или данные не были получены.
+        """
         pass
 
 
 class CoinGeckoClient(BaseApiClient):
+    """
+    Клиент для работы с API CoinGecko.
+
+    Специализируется на получении курсов криптовалют. Использует
+    внутреннюю маппинг таблицу для преобразования тикеров в ID CoinGecko.
+    Работает без API ключа (бесплатный тариф с лимитами).
+    """
     def fetch_rates(self, config: ParserConfig) -> Dict[str, float]:
+        # Формируем список ID криптовалют из маппинга
         ids = ",".join([
             config.CRYPTO_ID_MAP[c]
             for c in config.CRYPTO_CURRENCIES
@@ -48,7 +76,15 @@ class CoinGeckoClient(BaseApiClient):
 
 
 class ExchangeRateApiClient(BaseApiClient):
+    """
+    Клиент для работы с API ExchangeRate-API.
+
+    Специализируется на получении курсов фиатных валют. Требует API ключ.
+    Автоматически инвертирует курс, если необходимо хранить конвертацию
+    в формате FROM -> TO (например, EUR_USD означает 1 EUR = X USD).
+    """
     def fetch_rates(self, config: ParserConfig) -> Dict[str, float]:
+        # Формируем список ID криптовалют из маппинга
         if not config.EXCHANGERATE_API_KEY:
             raise ApiRequestError("API ключ ExchangeRate-API не настроен.")
 

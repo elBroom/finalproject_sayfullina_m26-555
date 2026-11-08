@@ -15,13 +15,16 @@ from valutatrade_hub.core.usecases import (
     register_user,
     sell_currency,
     show_portfolio,
-    update_rate,
     show_rate,
+    update_rate,
 )
 from valutatrade_hub.infra.settings import settings
 
 
 def run_cli():
+    """
+    Обработка команд.
+    """
     current_user = None
     parser = get_parser()
 

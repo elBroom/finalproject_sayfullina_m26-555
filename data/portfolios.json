@@ -1,14 +1,30 @@
 [
   {
-    "user_id": 3,
-    "wallets": {}
-  },
-  {
     "user_id": 1,
     "wallets": {
       "USD": 50.0,
       "BTC": 0.43999999999999995,
       "EUR": 200.0
+    }
+  },
+  {
+    "user_id": 5,
+    "wallets": {}
+  },
+  {
+    "user_id": 6,
+    "wallets": {}
+  },
+  {
+    "user_id": 3,
+    "wallets": {
+      "BTC": 0.019999999999999997
+    }
+  },
+  {
+    "user_id": 4,
+    "wallets": {
+      "BTC": 0.019999999999999997
     }
   }
 ]

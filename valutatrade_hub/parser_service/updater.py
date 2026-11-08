@@ -10,7 +10,20 @@ from valutatrade_hub.parser_service.storage import RatesStorage
 
 
 class RatesUpdater:
+    """
+    Сервис обновляющий курсы валют из внешних API.
+
+    Оркестрирует запросы к CoinGecko (криптовалюты) и ExchangeRate-API (фиат),
+    сохраняет актуальные данные в кэш и записывает историю изменений.
+    Поддерживает частичное обновление источников через фильтр.
+    """
     def __init__(self, config: ParserConfig):
+        """
+        Инициализация сервиса обновлений.
+
+        Args:
+            config: Объект конфигурации ParserConfig.
+        """
         self.config = config
         self.storage = RatesStorage(config)
         self.coin_client = CoinGeckoClient()
@@ -18,7 +31,19 @@ class RatesUpdater:
 
     def run_update(self, source_filter: str = None):
         """
-        source_filter: 'coingecko', 'exchangerate' или None (все).
+        Запускает процесс обновления курсов валют.
+
+        В зависимости от `source_filter` обновляет либо все данные,
+        либо только криптовалюты, либо только фиатные валюты.
+        Сохраняет успешные данные в кэш и историю, собирает ошибки.
+
+        Args:
+            source_filter: Фильтр источника данных.
+                Допустимые значения: "coingecko", "exchangerate" или None (все).
+
+        Returns:
+            bool: True, если обновление прошло успешно (без критических ошибок),
+                  False, если возникли ошибки при подключении к API.
         """
         print("Starting rates update...")
         last_refresh = datetime.now(timezone.utc).isoformat()
